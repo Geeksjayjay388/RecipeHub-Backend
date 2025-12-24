@@ -1,5 +1,36 @@
 const Recipe = require('../models/Recipe');
 const User = require('../models/User');
+const multer = require('multer');
+const path = require('path');
+
+// ✅ Multer configuration for image uploads
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, 'uploads/'); // Make sure this folder exists!
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'recipe-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  // Accept images only
+  if (file.mimetype.startsWith('image/')) {
+    cb(null, true);
+  } else {
+    cb(new Error('Only image files are allowed!'), false);
+  }
+};
+
+const upload = multer({ 
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 } // 5MB limit
+});
+
+// Define the upload middleware
+const uploadRecipeImage = upload.single('image');
 
 // @desc    Get all recipes
 // @route   GET /api/recipes
@@ -63,14 +94,70 @@ const getRecipeById = async (req, res) => {
 // @access  Private/Admin
 const createRecipe = async (req, res) => {
   try {
-    const recipe = new Recipe({
-      ...req.body,
+    console.log('📥 Received body:', req.body);
+    console.log('📥 Received file:', req.file);
+
+    // ✅ Parse JSON strings back to arrays (from FormData)
+    let ingredients = req.body.ingredients;
+    let instructions = req.body.instructions;
+    let tags = req.body.tags;
+
+    if (typeof ingredients === 'string') {
+      ingredients = JSON.parse(ingredients);
+    }
+    if (typeof instructions === 'string') {
+      instructions = JSON.parse(instructions);
+    }
+    if (typeof tags === 'string') {
+      tags = JSON.parse(tags);
+    }
+
+    // ✅ Convert string numbers to actual numbers
+    const prepTime = parseInt(req.body.prepTime);
+    const cookTime = parseInt(req.body.cookTime);
+    const servings = parseInt(req.body.servings);
+
+    // Validate required fields
+    if (!req.body.title || !req.body.description) {
+      return res.status(400).json({ 
+        message: 'Please provide title and description' 
+      });
+    }
+
+    if (isNaN(prepTime) || isNaN(cookTime) || isNaN(servings)) {
+      return res.status(400).json({ 
+        message: 'prepTime, cookTime, and servings must be valid numbers' 
+      });
+    }
+
+    // Build recipe data
+    const recipeData = {
+      title: req.body.title.trim(),
+      description: req.body.description.trim(),
+      category: req.body.category,
+      difficulty: req.body.difficulty,
+      prepTime,
+      cookTime,
+      servings,
+      ingredients,
+      instructions,
+      tags,
       author: req.user.id
-    });
-    
+    };
+
+    // Add image path if uploaded
+    if (req.file) {
+      recipeData.image = `/uploads/${req.file.filename}`;
+    }
+
+    console.log('✅ Final recipe data:', recipeData);
+
+    const recipe = new Recipe(recipeData);
     const createdRecipe = await recipe.save();
+    
     res.status(201).json(createdRecipe);
   } catch (error) {
+    console.error('❌ Error creating recipe:', error);
     res.status(400).json({ message: error.message });
   }
 };
@@ -80,10 +167,34 @@ const createRecipe = async (req, res) => {
 // @access  Private/Admin
 const updateRecipe = async (req, res) => {
   try {
+    console.log('📥 Update - Received body:', req.body);
+    console.log('📥 Update - Received file:', req.file);
+
     const recipe = await Recipe.findById(req.params.id);
     
     if (!recipe) {
       return res.status(404).json({ message: 'Recipe not found' });
+    }
+
+    // Parse JSON strings if they exist (from FormData)
+    if (req.body.ingredients && typeof req.body.ingredients === 'string') {
+      req.body.ingredients = JSON.parse(req.body.ingredients);
+    }
+    if (req.body.instructions && typeof req.body.instructions === 'string') {
+      req.body.instructions = JSON.parse(req.body.instructions);
+    }
+    if (req.body.tags && typeof req.body.tags === 'string') {
+      req.body.tags = JSON.parse(req.body.tags);
+    }
+
+    // Convert numbers
+    if (req.body.prepTime) req.body.prepTime = parseInt(req.body.prepTime);
+    if (req.body.cookTime) req.body.cookTime = parseInt(req.body.cookTime);
+    if (req.body.servings) req.body.servings = parseInt(req.body.servings);
+
+    // Update image if new file uploaded
+    if (req.file) {
+      req.body.image = `/uploads/${req.file.filename}`;
     }
     
     Object.keys(req.body).forEach(key => {
@@ -93,6 +204,7 @@ const updateRecipe = async (req, res) => {
     const updatedRecipe = await recipe.save();
     res.json(updatedRecipe);
   } catch (error) {
+    console.error('❌ Error updating recipe:', error);
     res.status(400).json({ message: error.message });
   }
 };
@@ -126,18 +238,15 @@ const likeRecipe = async (req, res) => {
       return res.status(404).json({ message: 'Recipe not found' });
     }
     
-    // Check if already liked
     const alreadyLiked = recipe.likes.some(
       like => like.toString() === req.user.id.toString()
     );
     
     if (alreadyLiked) {
-      // Unlike
       recipe.likes = recipe.likes.filter(
         like => like.toString() !== req.user.id.toString()
       );
     } else {
-      // Like
       recipe.likes.push(req.user.id);
     }
     
@@ -163,13 +272,11 @@ const starRecipe = async (req, res) => {
       return res.status(404).json({ message: 'Recipe not found' });
     }
     
-    // Check if already starred
     const alreadyStarred = recipe.stars.some(
       star => star.toString() === req.user.id.toString()
     );
     
     if (alreadyStarred) {
-      // Unstar
       recipe.stars = recipe.stars.filter(
         star => star.toString() !== req.user.id.toString()
       );
@@ -177,7 +284,6 @@ const starRecipe = async (req, res) => {
         id => id.toString() !== recipe._id.toString()
       );
     } else {
-      // Star
       recipe.stars.push(req.user.id);
       user.starredRecipes.push(recipe._id);
     }
@@ -207,7 +313,6 @@ const addReview = async (req, res) => {
     
     const { rating, comment } = req.body;
     
-    // Check if user already reviewed
     const alreadyReviewed = recipe.reviews.find(
       review => review.user.toString() === req.user.id.toString()
     );
@@ -261,5 +366,6 @@ module.exports = {
   likeRecipe,
   starRecipe,
   addReview,
-  getRecipeReviews
+  getRecipeReviews,
+  uploadRecipeImage // Export the multer middleware
 };

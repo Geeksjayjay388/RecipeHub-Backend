@@ -9,7 +9,8 @@ const {
   likeRecipe,
   starRecipe,
   addReview,
-  getRecipeReviews
+  getRecipeReviews,
+  uploadRecipeImage  // ✅ Import the multer middleware
 } = require('../controllers/recipeController');
 const { protect, admin } = require('../middleware/authMiddleware');
 
@@ -23,9 +24,9 @@ router.post('/:id/like', protect, likeRecipe);
 router.post('/:id/star', protect, starRecipe);
 router.post('/:id/reviews', protect, addReview);
 
-// Admin routes
-router.post('/', protect, admin, createRecipe);
-router.put('/:id', protect, admin, updateRecipe);
+// Admin routes - ✅ Add uploadRecipeImage middleware BEFORE createRecipe
+router.post('/', protect, admin, uploadRecipeImage, createRecipe);
+router.put('/:id', protect, admin, uploadRecipeImage, updateRecipe);
 router.delete('/:id', protect, admin, deleteRecipe);
 
 module.exports = router;
