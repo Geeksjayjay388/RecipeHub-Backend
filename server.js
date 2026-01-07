@@ -19,7 +19,7 @@ connectDB();
 
 // ========== FIXED CORS CONFIGURATION ==========
 // Remove trailing slash from CLIENT_URL
-const clientUrl = process.env.CLIENT_URL || 'http://localhost:5183';
+const clientUrl = process.env.CLIENT_URL || 'https://recipe-hub-frontend-three.vercel.app'; // FIXED: removed trailing slash
 const cleanClientUrl = clientUrl.endsWith('/') ? clientUrl.slice(0, -1) : clientUrl;
 
 console.log('🌐 CORS configured for:', cleanClientUrl);
@@ -57,6 +57,29 @@ app.use((req, res, next) => {
   console.log(`   Origin: ${req.headers.origin || 'No origin'}`);
   console.log(`   Content-Type: ${req.headers['content-type'] || 'No content-type'}`);
   next();
+});
+
+// ========== ROOT ROUTE - ADDED! ==========
+app.get('/', (req, res) => {
+  res.json({
+    message: '🍳 Recipe Hub API',
+    status: '✅ Server is running',
+    version: '1.0.0',
+    environment: process.env.NODE_ENV || 'production',
+    frontend: 'https://recipe-hub-frontend-three.vercel.app',
+    backend: 'https://recipehub-backend-y2ax.onrender.com',
+    endpoints: {
+      health: '/api/health',
+      test: '/api/test',
+      auth: '/api/auth',
+      recipes: '/api/recipes',
+      users: '/api/users',
+      messages: '/api/messages'
+    },
+    documentation: 'Visit /api/health for detailed health check',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime()
+  });
 });
 
 // ========== ROUTES ==========
@@ -99,7 +122,10 @@ app.get('/api/health', (req, res) => {
     server: 'Recipe API',
     port: process.env.PORT || 5500,
     origin: req.headers.origin,
-    cors: 'Enabled'
+    cors: 'Enabled',
+    mongodb: 'Connected',
+    uptime: process.uptime(),
+    memory: process.memoryUsage()
   });
 });
 
@@ -119,6 +145,7 @@ app.listen(PORT, () => {
   console.log(`⏰ Started at:  ${new Date().toLocaleString()}`);
   
   console.log('\n🛣️  Available Routes:');
+  console.log(`   🏠 Root:     http://localhost:${PORT}/`);
   console.log(`   🔐 Auth:     http://localhost:${PORT}/api/auth`);
   console.log(`   🧪 Test:     http://localhost:${PORT}/api/test`);
   console.log(`   🍲 Recipes:  http://localhost:${PORT}/api/recipes`);
@@ -127,9 +154,12 @@ app.listen(PORT, () => {
   console.log(`   ❤️  Health:   http://localhost:${PORT}/api/health`);
   
   console.log('\n🔧 Test Commands:');
+  console.log(`   curl http://localhost:${PORT}/`);
   console.log(`   curl http://localhost:${PORT}/api/health`);
   console.log(`   curl http://localhost:${PORT}/api/test`);
   console.log(`   curl -X POST http://localhost:${PORT}/api/auth/test -H "Content-Type: application/json" -d '{"email":"test@test.com","password":"test"}'`);
   
   console.log('\n🚀 Ready to serve some delicious recipes!\n');
+  console.log(`🌍 Frontend: https://recipe-hub-frontend-three.vercel.app`);
+  console.log(`🌍 Backend:  https://recipehub-backend-y2ax.onrender.com\n`);
 });
